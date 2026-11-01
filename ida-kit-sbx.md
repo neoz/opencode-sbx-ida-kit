@@ -9,18 +9,40 @@ Kiểm tra trên: `sbx v0.50.1`, macOS (Apple Silicon), sandbox image `opencode`
 
 ```
 sbx-ida-kit/
+├── AGENTS.md                     # rule khi làm việc trên kit (phía host)
 └── ida-kit/                      # mixin kit, tự chứa (self-contained)
     ├── spec.yaml
-    └── files/home/               # nội dung được đổ vào $HOME của user trong sandbox
+    └── files/home/               # → $HOME của user trong sandbox (/home/agent)
+        ├── .config/opencode/
+        │   └── AGENTS.md         # global rule: áp cho MỌI session trong sandbox
         └── ida-kit/              # → /home/agent/ida-kit/
             ├── install-ida.sh    # script cài đặt
             ├── runme.js          # tạo license + patch ida/libida
             └── ida/
-                ├── ida-pro_95_armlinux.run   # installer cho linux/arm64
                 └── ida-pro_95_x64linux.run   # installer cho linux/amd64
 ```
 
-`sbx kit inspect --offline ./ida-kit` xác nhận: `Files: 4 home`.
+Thêm `ida-pro_95_armlinux.run` vào `ida/` nếu sandbox chạy `linux/arm64`
+(Apple Silicon); script tự chọn theo `uname -m`.
+
+`sbx kit inspect --offline ./ida-kit` xác nhận số file sẽ được đổ vào sandbox
+(hiện tại `Files: 4 home`).
+
+### AGENTS.md trong kit
+
+`files/home/.config/opencode/AGENTS.md` → `/home/agent/.config/opencode/AGENTS.md`.
+OpenCode V2 nạp file này **trước** mọi `AGENTS.md` của project, nên rule trong đó áp
+cho mọi session trong sandbox, bất kể workspace nào. Đây là chỗ đặt các quy ước
+chung: phạm vi được phép (lab/red team), cách dùng IDA, đường dẫn `$IDADIR`, v.v.
+
+- Rule riêng cho một repo thì để `AGENTS.md` ở gốc repo đó (host bind-mount, không
+  cần nằm trong kit).
+- Rule riêng cho một thư mục con thì đặt `AGENTS.md` ngay trong thư mục đó; file gần
+  workspace nhất được nạp sau cùng.
+- Nếu image đặt `XDG_CONFIG_HOME` khác mặc định, OpenCode đọc
+  `$XDG_CONFIG_HOME/opencode/AGENTS.md`; khi đó copy thêm file vào đường dẫn đó.
+- `AGENTS.md` ở gốc `sbx-ida-kit/` là rule cho việc sửa kit trên host, không được đưa
+  vào sandbox — hai file độc lập, sửa cái nào cũng không tự đồng bộ sang cái kia.
 
 `ida-kit/spec.yaml` (kind `mixin`) khai báo:
 
@@ -36,8 +58,7 @@ Nếu không tìm thấy installer đúng kiến trúc, script in ra các đư�
 mã 0: sandbox vẫn được tạo, chỉ là chưa có IDA.
 
 Lưu ý kiến trúc: sandbox local trên Mac Apple Silicon là `linux/arm64`, nên cần
-`ida-pro_*_armlinux.run`. Trên máy x86_64 thì dùng `ida-pro_*_x64linux.run`. Cả hai
-đã có sẵn trong kit; script tự chọn theo `uname -m`.
+`ida-pro_*_armlinux.run`. Trên máy x86_64 thì dùng `ida-pro_*_x64linux.run`.
 
 License không cần file sẵn: `runme.js` sinh `idapro.hexlic` rồi ghi vào cả
 `/opt/ida-pro` và `~/.idapro`. Muốn dùng license riêng thì đặt `idapro.hexlic` vào
@@ -180,6 +201,7 @@ cài lại IDA.
 | Triệu chứng | Nguyên nhân / cách xử lý |
 |-------------|--------------------------|
 | Log tạo sandbox có `IDA not installed yet.` | Thiếu installer đúng kiến trúc cho máy này. Đọc các dòng `this machine` / `missing` / `looked in`, và `wrong arch` nếu kit có installer của kiến trúc khác. Thêm file vào `files/home/ida-kit/ida/` rồi `sbx kit add`, hoặc copy vào `~/ida` của sandbox (mục 4) |
+| Agent không thấy rule trong sandbox | Kiểm tra `ls ~/.config/opencode/AGENTS.md` bên trong sandbox. Nếu image đặt `XDG_CONFIG_HOME` khác mặc định thì file phải nằm trong `$XDG_CONFIG_HOME/opencode/` |
 | `no match` khi chạy `runme.js` | Bản IDA khác với bản script nhắm tới (9.4 beta1 / 9.5); pattern patch không còn khớp. Cần cập nhật `SEARCH`/`REPLACE` |
 | `node not found, but runme.js needs it` | Image không có node và bước cài node trong `spec.yaml` thất bại. Cài lại bằng `sbx kit add` hoặc `apt-get install nodejs` |
 | `idat rejected ...` khi smoke test | License không hợp lệ cho bản IDA này. Xoá `~/.idapro/idapro.hexlic` và `/opt/ida-pro/idapro.hexlic` rồi chạy lại script |

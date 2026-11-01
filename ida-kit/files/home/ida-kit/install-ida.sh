@@ -9,7 +9,7 @@
 # script prints what it looked for and exits 3, which makes `sbx create` fail and
 # show that output (sbx hides the output of install commands that exit 0). IDA is
 # required: there is no way to continue without it.
-#set -euo pipefail
+set -euo pipefail
 
 IDADIR="${IDADIR:-/opt/ida-pro}"
 IDAUSR="${HOME}/.idapro"
@@ -84,8 +84,10 @@ HCLI="$(command -v hcli)"
 ida_python_version() {
   local reg="${HOME}/.idapro/ida.reg" ver=""
   if [ -f "${reg}" ]; then
+    # grep exits 1 when the registry has no libpython line; keep that benign
+    # with `|| true`, otherwise pipefail + set -e abort the whole install.
     ver="$(grep -ao 'libpython3\.[0-9]\+' "${reg}" 2>/dev/null | head -n1 |
-           sed 's/^libpython//')"
+           sed 's/^libpython//' || true)"
   fi
   if [ -z "${ver}" ] && command -v python3 >/dev/null 2>&1; then
     ver="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"

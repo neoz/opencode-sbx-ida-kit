@@ -77,6 +77,49 @@ case "${output}" in
   *) fail "missing 'IDA not installed yet.' in output" ;;
 esac
 
+echo "test: the script runs under set -euo pipefail"
+if grep -qx 'set -euo pipefail' "${KIT_DIR}/install-ida.sh"; then
+  ok "strict mode is enabled"
+else
+  fail "expected an active 'set -euo pipefail' (not commented out)"
+fi
+
+# The version probe must survive a registry file that does not mention
+# libpython: grep exits 1 there, and pipefail + -e used to kill the script.
+echo "test: ida_python_version tolerates a registry without libpython"
+version_fn="$(awk '/^ida_python_version\(\) \{/{p=1} p{print} p&&/^\}/{exit}' \
+  "${KIT_DIR}/install-ida.sh")"
+
+if [ -z "${version_fn}" ]; then
+  fail "could not extract ida_python_version from install-ida.sh"
+else
+  harness="${TMP}/version-harness.sh"
+  {
+    echo 'set -euo pipefail'
+    printf '%s\n' "${version_fn}"
+    echo 'ida_python_version'
+  } >"${harness}"
+
+  home="${TMP}/version-home"
+  mkdir -p "${home}/.idapro"
+  printf 'nothing useful here\n' >"${home}/.idapro/ida.reg"
+
+  output="$(env -i HOME="${home}" PATH="/usr/bin:/bin:/usr/sbin:/sbin" \
+    bash "${harness}" 2>&1)"
+  status=$?
+
+  if [ "${status}" -ne 0 ]; then
+    fail "expected a fallback version, got exit ${status}: ${output}"
+  else
+    ok "exits 0 (${output})"
+  fi
+
+  case "${output}" in
+    [0-9]*.[0-9]*) ok "prints a python version fallback" ;;
+    *) fail "expected a version like 3.14, got '${output}'" ;;
+  esac
+fi
+
 if [ "${failures}" -ne 0 ]; then
   echo "${failures} check(s) failed" >&2
   exit 1

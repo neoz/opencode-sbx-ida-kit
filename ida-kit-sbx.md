@@ -54,8 +54,23 @@ chung: phạm vi được phép (lab/red team), cách dùng IDA, đường dẫn
 
 `install-ida.sh` tìm installer và `runme.js` theo thứ tự: `~/ida/` (ưu tiên cao nhất,
 dùng để ghi đè) → `<kit>/ida/` → `<kit>/` (nơi có `runme.js`) → `$WORKSPACE_DIR/ida/`.
-Nếu không tìm thấy installer đúng kiến trúc, script in ra các đường dẫn đã tìm và thoát
-mã 0: sandbox vẫn được tạo, chỉ là chưa có IDA.
+Nếu không tìm thấy installer đúng kiến trúc, script in ra các đường dẫn đã tìm và
+**thoát mã 3**, nên `sbx create` dừng lại và in nguyên phần output đó:
+
+```
+✗ bash /home/agent/ida-kit/install-ida.sh (kit=ida-mcp, user=1000, exit 3)
+── captured output ──
+IDA not installed yet.
+  this machine : aarch64 (needs an ida-pro_*_armlinux.run installer)
+  missing      : ida-pro_<version>_armlinux.run
+  looked in    : /home/agent/ida /home/agent/ida-kit/ida ...
+──────────────────────
+```
+
+Đây là chủ ý: `sbx` **chỉ hiện output của install command khi command đó exit khác 0**.
+Nếu script thoát 0 (hành vi cũ), message `IDA not installed yet.` bị nuốt mất và sandbox
+vẫn được tạo mà không ai biết là thiếu IDA. IDA là yêu cầu bắt buộc — không có tùy chọn
+tạo sandbox thiếu IDA.
 
 Lưu ý kiến trúc: sandbox local trên Mac Apple Silicon là `linux/arm64`, nên cần
 `ida-pro_*_armlinux.run`. Trên máy x86_64 thì dùng `ida-pro_*_x64linux.run`.
@@ -76,14 +91,21 @@ Chưa đăng nhập Docker cũng kiểm tra được (bỏ qua kiểm tra policy
 
 ```bash
 sbx kit validate --offline ./ida-kit
-sbx kit inspect  --offline ./ida-kit     # → Files: 4 home
+sbx kit inspect  --offline ./ida-kit     # → Files: 3 home (4 khi đã có installer trong ida/)
+```
+
+Kiểm tra hành vi khi thiếu installer (không cần Docker):
+
+```bash
+bash tests/test-install-ida-missing-installer.sh
 ```
 
 ## 3. Tạo sandbox
 
 Workspace được bind-mount vào sandbox ở **cùng đường dẫn như trên host**, và
-`$WORKSPACE_DIR` trỏ tới đó. Kit đã chứa sẵn installer + `runme.js`, nên không cần
-chuẩn bị gì thêm trong workspace.
+`$WORKSPACE_DIR` trỏ tới đó. `runme.js` đã nằm trong kit; installer IDA phải có trong
+`ida-kit/files/home/ida-kit/ida/` (hoặc `~/ida/`, hoặc `$WORKSPACE_DIR/ida/`). Thiếu
+installer thì `sbx create` dừng và in lý do (xem mục 1).
 
 ### Cách A: tạo rồi attach (khuyên dùng)
 
@@ -200,7 +222,7 @@ cài lại IDA.
 
 | Triệu chứng | Nguyên nhân / cách xử lý |
 |-------------|--------------------------|
-| Log tạo sandbox có `IDA not installed yet.` | Thiếu installer đúng kiến trúc cho máy này. Đọc các dòng `this machine` / `missing` / `looked in`, và `wrong arch` nếu kit có installer của kiến trúc khác. Thêm file vào `files/home/ida-kit/ida/` rồi `sbx kit add`, hoặc copy vào `~/ida` của sandbox (mục 4) |
+| `sbx create` dừng với `✗ bash /home/agent/ida-kit/install-ida.sh (… exit 3)` | Thiếu installer đúng kiến trúc cho máy này (script cố tình exit 3 để `sbx` hiện output; exit 0 sẽ bị `sbx` nuốt mất). Đọc các dòng `this machine` / `missing` / `looked in`, và `wrong arch` nếu kit có installer của kiến trúc khác. Thêm file vào `files/home/ida-kit/ida/` rồi `sbx kit add`, hoặc copy vào `~/ida` của sandbox (mục 4) |
 | Agent không thấy rule trong sandbox | Kiểm tra `ls ~/.config/opencode/AGENTS.md` bên trong sandbox. Nếu image đặt `XDG_CONFIG_HOME` khác mặc định thì file phải nằm trong `$XDG_CONFIG_HOME/opencode/` |
 | `no match` khi chạy `runme.js` | Bản IDA khác với bản script nhắm tới (9.4 beta1 / 9.5); pattern patch không còn khớp. Cần cập nhật `SEARCH`/`REPLACE` |
 | `node not found, but runme.js needs it` | Image không có node và bước cài node trong `spec.yaml` thất bại. Cài lại bằng `sbx kit add` hoặc `apt-get install nodejs` |

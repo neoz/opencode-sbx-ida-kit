@@ -6,8 +6,10 @@
 # and the license is generated locally by the runme.js next to this script.
 # To override either one, drop your own copy in ~/ida/ (highest priority) or in
 # <workspace>/ida/. If no installer for this machine's architecture is found the
-# script prints what it looked for and exits 0 (nothing installed).
-set -euo pipefail
+# script prints what it looked for and exits 3, which makes `sbx create` fail and
+# show that output (sbx hides the output of install commands that exit 0). IDA is
+# required: there is no way to continue without it.
+#set -euo pipefail
 
 IDADIR="${IDADIR:-/opt/ida-pro}"
 IDAUSR="${HOME}/.idapro"
@@ -65,7 +67,7 @@ if [ "${#missing[@]}" -gt 0 ]; then
     echo "  fix          : put runme.js in ${HOME}/ida/ (or next to this script: ${SCRIPT_DIR}/)" >&2
   fi
   echo "  then run     : bash ${BASH_SOURCE[0]}" >&2
-  exit 0
+  exit 3
 fi
 
 # Files copied into a kit may arrive without the exec bit; hcli runs the

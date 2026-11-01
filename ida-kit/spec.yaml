@@ -1,0 +1,24 @@
+schemaVersion: "2"
+name: ida-mcp
+kind: mixin
+description: IDA Pro (user-licensed) plus the ida-mcp server for opencode.
+environment:
+  variables:
+    IDADIR: /opt/ida-pro
+    IDA_NEXUS_IDALIB_ONLY: "1"
+    OPENCODE_CONFIG_CONTENT: '{"mcp":{"ida":{"type":"local","command":["uv","tool","run","--exclude-newer=1s","ida-mcp","stdio"],"environment":{"IDADIR":"/opt/ida-pro","IDA_NEXUS_IDALIB_ONLY":"1"},"enabled":true}}}'
+permissions:
+  network:
+    allow:
+      - pypi.org
+      - files.pythonhosted.org
+      - archive.ubuntu.com
+      - security.ubuntu.com
+      - ports.ubuntu.com
+setup:
+  install:
+    # Some agent images already ship node; only fall back to Ubuntu's packages.
+    - command: command -v node >/dev/null 2>&1 || { apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs npm; }
+      user: "0"
+    - command: bash /home/agent/ida-kit/install-ida.sh
+      user: "1000"

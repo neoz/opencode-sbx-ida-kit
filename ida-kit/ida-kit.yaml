@@ -1,0 +1,43 @@
+# syntax=docker/sandbox-kit:3
+# MIGRATION NOTE: v2 `name: ida-mcp` is dropped (a v3 kit's identity is the
+# reference it is consumed by). `environment.variables` and the files/ tree
+# moved into ida-kit.dockerfile: ENV for the variables, an overlay for files.
+schemaVersion: "3"
+kind: mixin
+displayName: IDA Pro + ida-mcp
+description: IDA Pro (user-licensed) plus the ida-mcp server for opencode.
+version: "1.0.0"
+capabilities:
+  # MIGRATION NOTE: v2 had one allow list. The install hooks below need these
+  # hosts (apt, uv, hcli) and ida-mcp is fetched by `uv tool run` at runtime,
+  # so the list is granted in both phases.
+  - type: com.docker.sandbox/network-policy@1
+    config:
+      install:
+        allow:
+          - pypi.org
+          - files.pythonhosted.org
+          - archive.ubuntu.com
+          - security.ubuntu.com
+          - ports.ubuntu.com
+      runtime:
+        allow:
+          - pypi.org
+          - files.pythonhosted.org
+          - archive.ubuntu.com
+          - security.ubuntu.com
+          - ports.ubuntu.com
+  # MIGRATION NOTE: hook environments are deny-by-default in v3, so every
+  # variable the scripts (and their apt/uv/hcli children) read is declared.
+  - type: com.docker.sandbox/lifecycle@1
+    config:
+      install:
+        # Some agent images already ship node; only fall back to Ubuntu's packages.
+        - command: command -v node >/dev/null 2>&1 || { apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs npm; }
+          user: "0"
+          env: [HTTP_PROXY, HTTPS_PROXY, NO_PROXY]
+          description: Install nodejs if the base image lacks it (runme.js needs it)
+        - command: bash /home/agent/ida-kit/install-ida.sh
+          user: "1000"
+          env: [IDADIR, WORKSPACE_DIR, HTTP_PROXY, HTTPS_PROXY, NO_PROXY]
+          description: Install IDA Pro, generate its license and set up idalib for ida-mcp
